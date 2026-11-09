@@ -14,47 +14,35 @@ Telegram-бот продаёт VPN-доступ за Telegram Stars и выда�
 |---|---|---|
 | `BOT_TOKEN` | да | токен от @BotFather |
 | `STARS_PRICE` | нет | `50` |
-| `ADMIN_ID` | да | твой Telegram ID (`6628389006`) |
+| `ADMIN_ID` | да | Telegram ID владельца |
 | `ISSUE_KEY` | да | ссылка-подписка, которая выдаётся покупателям |
-| `PROXY_URL` | нет | на сервере оставить пустым |
-| `PORT` | да (на хостинге) | порт health-сервера, Koyeb задаёт сам |
+| `PROXY_URL` | нет | на сервере не нужен |
+| `PORT` | да (на хостинге) | выдаётся Render автоматически |
 
-## Деплой на Koyeb (бесплатно)
+## Деплой на Render (бесплатно)
 
-1. Создай аккаунт на https://app.koyeb.com (вход через GitHub).
-2. **Create Service → GitHub** → выбери этот репозиторий.
-3. Builder: **Dockerfile** (лежит в корне).
-4. Instance type: **Free** (512 MB).
-5. В **Environment variables** добавь:
+1. https://dashboard.render.com → **New → Web Service**.
+2. **Public Git repository**: `https://github.com/danYx1/another-vpn-bot`.
+3. Runtime: **Docker**, Branch: `main`.
+4. Instance Type: **Free**.
+5. Environment variables:
    - `BOT_TOKEN`
+   - `ISSUE_KEY`
+   - `ADMIN_ID`
    - `STARS_PRICE=50`
-   - `ADMIN_ID=6628389006`
-   - `ISSUE_KEY=https://s-25867.pl9.h1clayd.click/sub/a01aef62-3c80-4521-964a-c76449e3a8ef`
-   - `PROXY_URL` — оставь пустым (или не добавляй)
-6. Порт: `8000`. Health check path: `/health`.
-7. Deploy. В логах должно появиться `Бот @davinchiyybot запущен`.
-8. Проверь в Telegram: `/start`.
+6. Health Check Path: `/health`.
+7. **Create Web Service**.
 
-## Чтобы бесплатный инстанс не засыпал
+Бот слушает `$PORT` (health-сервер) и параллельно делает long polling Telegram.
 
-Koyeb Free останавливает сервис после ~1 часа без входящего трафика. Заведи бесплатный монитор:
+## Чтобы бесплатный сервис не засыпал
 
-1. https://cron-job.org → Create cronjob.
-2. URL: `https://<твой-сервис>.koyeb.app/health`
-3. Интервал: каждые 5 минут.
+Render Free останавливает сервис после 15 минут без входящих запросов.
+GitHub Actions workflow `.github/workflows/keepalive.yml` пингует `/health`
+каждые 5 минут, поэтому контейнер не спит.
 
-Тогда контейнер не будет засыпать и бот будет работать круглосуточно.
-
-## Важно про данные
+## Данные
 
 На бесплатном тарифе диск эфемерный: `data/users.json` и `data/payments.json`
-сбрасываются при передеплое/перезапуске. На доступ это не влияет (ключ один и
-тот же для всех), но история платежей и сроки подписок теряются.
-
-Если нужна постоянная история — подключи внешнюю БД или платный volume.
-
-## Альтернатива на 100% бесплатно и без засыпания
-
-Oracle Cloud **Always Free**: ARM-инстанс 4 CPU / 24 GB RAM бесплатно навсегда
-(нужна карта для верификации). Бот запускается через `systemd`, инструкция —
-в чате.
+сбрасываются при передеплое. На доступ это не влияет — ключ один и тот же
+для всех, но история платежей и сроки подписок теряются.
