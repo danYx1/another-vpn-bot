@@ -1,0 +1,8 @@
+.env
+.env.*
+data/
+bot.log
+__pycache__/
+*.pyc
+*.pyo
+start.bat
