@@ -555,9 +555,20 @@ async def main() -> None:
             await health_runner.cleanup()
 
 
+async def run_forever() -> None:
+    """Держит бота запущенным: перезапускает при падении или недоступном прокси."""
+    while True:
+        try:
+            await main()
+            return
+        except Exception:
+            logging.exception("Бот упал, перезапуск через 15 секунд")
+            await asyncio.sleep(15)
+
+
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        asyncio.run(run_forever())
     except KeyboardInterrupt:
         print("Остановлено пользователем.")
     except Exception:
