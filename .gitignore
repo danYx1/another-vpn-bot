@@ -1,0 +1,8 @@
+.env
+.env.*
+!/.env.example
+data/
+bot.log
+__pycache__/
+*.pyc
+*.pyo
