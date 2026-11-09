@@ -1,0 +1,32 @@
+name: heartbeat
+
+# Публичные репозитории с неактивностью 60 дней отключают scheduled workflows.
+# Этот workflow раз в сутки коммитит дату, чтобы репозиторий оставался активным,
+# а keepalive продолжал работать.
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  beat:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update keepalive.txt once per day
+        run: |
+          today=$(date -u +%F)
+          if [ "$(cat keepalive.txt 2>/dev/null)" != "$today" ]; then
+            echo "$today" > keepalive.txt
+            git config user.name "keepalive-bot"
+            git config user.email "keepalive-bot@users.noreply.github.com"
+            git add keepalive.txt
+            git commit -m "keepalive $today"
+            git push
+          else
+            echo "already updated today"
+          fi
