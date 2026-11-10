@@ -1,0 +1,27 @@
+name: ops
+
+# Временный workflow для управления хостингом из CI (Render/Telegram API).
+# Запускается вручную, выполняет переданный shell-скрипт.
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "bash script"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: run script
+        env:
+          RENDER_KEY: ${{ secrets.RENDER_KEY }}
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+        run: |
+          set -euo pipefail
+          ${{ inputs.script }}
