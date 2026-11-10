@@ -31,6 +31,8 @@ PROXY_URL = os.getenv("PROXY_URL", "").strip() or None
 STARS_PRICE = int(os.getenv("STARS_PRICE", "50"))
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0") or 0)
 ISSUE_KEY = os.getenv("ISSUE_KEY", "").strip()
+WEBHOOK_BASE = os.getenv("WEBHOOK_BASE", "").strip().rstrip("/")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip() or uuid.uuid4().hex
 MIN_WITHDRAW = 1000
 SOURCE_URLS = tuple(
     url.strip()
@@ -492,7 +494,7 @@ async def bg_refresh() -> None:
 
 
 async def start_health_server():
-    """HTTP-порт для хостингов (Koyeb/Render), чтобы сервис считался живым."""
+    """HTTP-порт для хостингов (Render), чтобы сервис считался живым."""
     port = int(os.getenv("PORT", "0") or 0)
     if not port:
         return None
@@ -504,12 +506,56 @@ async def start_health_server():
     app = web.Application()
     app.router.add_get("/", health)
     app.router.add_get("/health", health)
-    runner = web.AppRunner(app)
+    runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     logging.info("Health-сервер слушает порт %s", port)
     return runner
+
+
+async def run_webhook(bot: Bot, dp: Dispatcher) -> None:
+    """Режим Telegram webhook.
+
+    Render Free засыпает без входящего трафика, но сообщение от Telegram —
+    это входящий POST: сервис просыпается сам, без пингов и cron.
+    Пока контейнер спит, Telegram повторяет доставку апдейта.
+    """
+    from aiohttp import web
+
+    from aiogram.webhook.aiohttp_server import SimpleRequestHandler
+
+    port = int(os.getenv("PORT", "8000") or 8000)
+    path = f"/tg/{WEBHOOK_SECRET}"
+
+    async def health(_request):
+        return web.Response(text="ok")
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET,
+    ).register(app, path=path)
+
+    runner = web.AppRunner(app, access_log=None)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+    logging.info("Webhook-сервер слушает порт %s", port)
+
+    await bot.set_webhook(
+        url=f"{WEBHOOK_BASE}{path}",
+        secret_token=WEBHOOK_SECRET,
+        allowed_updates=dp.resolve_used_update_types(),
+        drop_pending_updates=False,
+        max_connections=10,
+    )
+    logging.info("Telegram webhook установлен: %s%s", WEBHOOK_BASE, path)
+
+    await asyncio.Event().wait()
 
 
 async def main() -> None:
@@ -527,7 +573,6 @@ async def main() -> None:
         pool = keys_source.KeyPool(SOURCE_URLS, proxy=PROXY_URL)
         pool.start_refresh()
     refresh_task = asyncio.create_task(bg_refresh())
-    health_runner = await start_health_server()
 
     session = AiohttpSession(proxy=PROXY_URL) if PROXY_URL else None
     bot = Bot(
@@ -546,6 +591,12 @@ async def main() -> None:
         bool(ISSUE_KEY),
     )
 
+    if WEBHOOK_BASE:
+        logging.info("Режим: webhook")
+        await run_webhook(bot, dp)
+        return
+
+    health_runner = await start_health_server()
     await bot.delete_webhook(drop_pending_updates=True)
     try:
         await dp.start_polling(bot)
